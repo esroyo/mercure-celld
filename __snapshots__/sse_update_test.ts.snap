@@ -1,0 +1,58 @@
+export const snapshot = {};
+
+snapshot[`should serialize an event without optionals as expected 1`] = `
+"id: #ULID
+data: potato
+
+"
+`;
+
+snapshot[`should serialize an event with eventType field as expected 1`] = `
+"id: #ULID
+data: potato
+event: add
+
+"
+`;
+
+snapshot[`should serialize an event with eventRetry field as expected 1`] = `
+"id: #ULID
+data: potato
+retry: 5
+
+"
+`;
+
+snapshot[`should serialize an event with multiple data lines as expected 1`] = `
+"id: #ULID
+data: potato
+data: garlic
+
+"
+`;
+
+snapshot[`should map Publish body options 1`] = `
+"id: 1-1
+data: hello
+data: world
+event: message
+retry: 5
+
+"
+`;
+
+snapshot[`should map DB row columns 1`] = `
+"id: 1-1
+data: hello
+data: world
+event: message
+retry: 5
+
+"
+`;
+
+snapshot[`should map DB row null columns 1`] = `
+"id: #ULID
+
+"
+`;
