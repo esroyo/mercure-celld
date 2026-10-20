@@ -1,0 +1,16 @@
+# Node & Deno local dependencies
+node_modules
+.deno
+
+# Docker / Git / Environment
+.git
+.gitignore
+.env
+.env.*
+Dockerfile*
+docker-compose*
+
+# Build outputs & logs
+dist
+.wrangler
+npm-debug.log

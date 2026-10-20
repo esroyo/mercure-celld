@@ -1,4 +1,4 @@
-import { monotonicUlid as _ulid } from "@std/ulid";
+import { monotonicUlid as _ulid } from "@jsr/std__ulid";
 import type { SseUpdateLike, SubscriberLike } from "./types.ts";
 import { parseGetRequest } from "./utils.ts";
 
