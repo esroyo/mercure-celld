@@ -7,6 +7,12 @@ import type {
 import { SseUpdate } from "./sse_update.ts";
 
 type CtorParams = ConstructorParameters<typeof Topic>;
+type PartialSqlStorage = {
+  exec<T extends Record<string, SqlStorageValue>>(
+    query: string,
+    ...bindings: any[]
+  ): { toArray(): T[] };
+};
 
 export class Topic implements TopicLike {
   name: CtorParams[0]["name"];
@@ -16,7 +22,7 @@ export class Topic implements TopicLike {
 
   constructor(
     { name }: Pick<TopicLike, "name">,
-    { sql }: { sql: Pick<SqlStorage, "exec"> },
+    { sql }: { sql: PartialSqlStorage },
   ) {
     this.name = name;
     this.#subscribers = new Set();
@@ -65,7 +71,7 @@ export class Topic implements TopicLike {
   async addSseUpdate(update: SseUpdateLike) {
     this.#sql.exec(
       "INSERT INTO sse_updates VALUES (?, ?, ?, ?, ?, ?)",
-      update.eventData.join("\n"),
+      update.eventData.length ? update.eventData.join("\n") : null,
       update.eventId,
       update.eventRetry,
       update.eventType,
@@ -74,7 +80,7 @@ export class Topic implements TopicLike {
     ).toArray();
     const text = update.toString();
     for (const subscriber of this.#subscribers) {
-      if (subscriber.isAuthorized(update)) {
+      if (!update.private || await subscriber.isAuthorized(update)) {
         subscriber.send(text);
       }
     }
