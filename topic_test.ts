@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
-import { assertEquals } from "@std/assert";
-import { assertSpyCalls, spy, stub } from "@std/testing/mock";
+import { assertEquals, assertRejects } from "@std/assert";
+import { assertSpyCalls, spy } from "@std/testing/mock";
+import { stub } from "@std/testing/unstable-stub";
 
 import { Topic } from "./topic.ts";
 import { SseUpdate } from "./sse_update.ts";
@@ -41,7 +42,7 @@ Deno.test("should create once the sse_updates table on construction", async (_t)
   assertSpyCalls(sql.exec, 2 + 2);
 });
 
-Deno.test("should persist SseUpdates", async (_t) => {
+Deno.test("should persist SseUpdates on sql, across different Topic instances", async (_t) => {
   const { sql } = createSql();
   const topic = new Topic({ name: topicName }, { sql });
   const update = new SseUpdate({
@@ -59,11 +60,22 @@ Deno.test("should persist SseUpdates", async (_t) => {
   assertEquals(found.length, 2);
   assertEquals(JSON.stringify(found[0]), JSON.stringify(update));
   assertEquals(JSON.stringify(found[1]), JSON.stringify(anotherUpdate));
+  const topicSame = new Topic({ name: topicName }, { sql });
+  assertEquals((await topicSame.findSseUpdate()).length, 2);
+});
+
+Deno.test("should reject duplicate event_id updates", async (_t) => {
+  const { sql } = createSql();
+  const topic = new Topic({ name: topicName }, { sql });
+  const eventId = crypto.randomUUID();
+  const update = new SseUpdate({ eventId, topic: topicName });
+  await topic.addSseUpdate(update);
+  assertRejects(() => topic.addSseUpdate(update));
 });
 
 Deno.test("should find by event_id", async (_t) => {
   const { sql } = createSql();
-  const topic = new Topic({ name: "test" }, { sql });
+  const topic = new Topic({ name: topicName }, { sql });
   const eventId = crypto.randomUUID();
   const update = new SseUpdate({ eventId, topic: topicName });
   await topic.addSseUpdate(update);
@@ -75,7 +87,7 @@ Deno.test("should find by event_id", async (_t) => {
 
 Deno.test("should find by id gt filter", async (_t) => {
   const { sql } = createSql();
-  const topic = new Topic({ name: "test" }, { sql });
+  const topic = new Topic({ name: topicName }, { sql });
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
   const update = new SseUpdate({ topic: topicName });
   await topic.addSseUpdate(update);
@@ -89,7 +101,7 @@ Deno.test("should find by id gt filter", async (_t) => {
 
 Deno.test("should subscribe from now", async (_t) => {
   const { sql } = createSql();
-  const topic = new Topic({ name: "test" }, { sql });
+  const topic = new Topic({ name: topicName }, { sql });
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
@@ -104,7 +116,7 @@ Deno.test("should subscribe from now", async (_t) => {
 
 Deno.test("should subscribe from the earliest update", async (_t) => {
   const { sql } = createSql();
-  const topic = new Topic({ name: "test" }, { sql });
+  const topic = new Topic({ name: topicName }, { sql });
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
@@ -116,7 +128,7 @@ Deno.test("should subscribe from the earliest update", async (_t) => {
 
 Deno.test("should subscribe from an specific update (built-in id)", async (_t) => {
   const { sql } = createSql();
-  const topic = new Topic({ name: "test" }, { sql });
+  const topic = new Topic({ name: topicName }, { sql });
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
   const update = new SseUpdate({ topic: topicName });
   await topic.addSseUpdate(update);
@@ -132,7 +144,7 @@ Deno.test("should subscribe from an specific update (built-in id)", async (_t) =
 
 Deno.test("should subscribe from an specific update (custom id)", async (_t) => {
   const { sql } = createSql();
-  const topic = new Topic({ name: "test" }, { sql });
+  const topic = new Topic({ name: topicName }, { sql });
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
   const eventId = "magic-potato-1";
   const update = new SseUpdate({ eventId, topic: topicName });
@@ -144,9 +156,24 @@ Deno.test("should subscribe from an specific update (custom id)", async (_t) => 
   assertSpyCalls(sendSpy, 1);
 });
 
+Deno.test("should subscribe from now if the specific update is unknown", async (_t) => {
+  const { sql } = createSql();
+  const topic = new Topic({ name: topicName }, { sql });
+  await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
+  const subscriber = new Subscriber({
+    lastEventId: "magic-potato-1",
+    topic: topicName,
+  });
+  const sendSpy = spy(subscriber, "send");
+  await topic.addSubscriber(subscriber);
+  assertSpyCalls(sendSpy, 0);
+  await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
+  assertSpyCalls(sendSpy, 1);
+});
+
 Deno.test("should not receive private updates if not authorized", async (_t) => {
   const { sql } = createSql();
-  const topic = new Topic({ name: "test" }, { sql });
+  const topic = new Topic({ name: topicName }, { sql });
   const subscriber = new Subscriber({ topic: topicName });
   const sendSpy = spy(subscriber, "send");
   const _ = stub(subscriber, "isAuthorized", async () => false);
@@ -157,4 +184,31 @@ Deno.test("should not receive private updates if not authorized", async (_t) => 
   assertSpyCalls(sendSpy, 0);
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
   assertSpyCalls(sendSpy, 1);
+});
+
+Deno.test("should receive private updates if authorized", async (_t) => {
+  const { sql } = createSql();
+  const topic = new Topic({ name: topicName }, { sql });
+  const subscriber = new Subscriber({ topic: topicName });
+  const sendSpy = spy(subscriber, "send");
+  const _ = stub(subscriber, "isAuthorized", async () => true);
+  await topic.addSubscriber(subscriber);
+  assertSpyCalls(sendSpy, 0);
+  const privateUpdate = new SseUpdate({ topic: topicName, private: 1 });
+  await topic.addSseUpdate(privateUpdate);
+  assertSpyCalls(sendSpy, 1);
+  await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
+  assertSpyCalls(sendSpy, 2);
+});
+
+Deno.test("should unsubscribe if stream closes", async (_t) => {
+  const { sql } = createSql();
+  const topic = new Topic({ name: topicName }, { sql });
+  const subscriber = new Subscriber({ topic: topicName });
+  const deferredClosed = Promise.withResolvers();
+  const _ = stub(subscriber, "closed", { get: () => deferredClosed.promise });
+  const sendSpy = spy(subscriber, "send");
+  deferredClosed.reject();
+  await topic.addSubscriber(subscriber);
+  assertSpyCalls(sendSpy, 0);
 });
