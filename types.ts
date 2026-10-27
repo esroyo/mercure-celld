@@ -4,7 +4,7 @@ export type SseUpdatePost = {
    * first occurrence is the canonical topic, any others are
    * alternate topics.
    */
-  topic: string[];
+  topics: Match[];
 
   /**
    * Payload of the update. Anything you want: JSON, HTML, JSON Patch, plain text.
@@ -116,6 +116,7 @@ export interface ClientLike {
    * The public ID of the target Topic.
    */
   topic: string;
+  topics: Match[];
 
   isAuthorized(update: SseUpdateLike): Promise<boolean>;
 }
@@ -133,12 +134,20 @@ export interface SubscriberLike extends ClientLike {
    * - `null`: Receive all messages published from the exact moment the subscription was created.
    */
   lastEventId: string | null;
+}
 
+export interface SubscriberStreamLike extends SubscriberLike {
   closed: Promise<void>;
-
-  send(text: string): Promise<void>;
-
   getReadableStream(): ReadableStream;
+}
+
+export interface SubscriberStreamMultiTopicLike extends SubscriberStreamLike {
+  topics: Array<Match & { isConnected: boolean }>;
+  connect(topic: string, readableUpstream: ReadableStream): Promise<void>;
+}
+
+export interface SubscriberStreamSingleTopicLike extends SubscriberStreamLike {
+  send(text: string): Promise<void>;
 }
 
 /**
@@ -163,6 +172,10 @@ export interface TopicLike {
   addSubscriber(subscriber: SubscriberLike): Promise<void>;
   addSseUpdate(update: SseUpdateLike): Promise<void>;
   findSseUpdate(filter?: SseUpdateFilterQuery): Promise<SseUpdateLike[]>;
+}
+
+export interface TopicSingleLike extends TopicLike {
+  addSubscriber(subscriber: SubscriberStreamSingleTopicLike): Promise<void>;
 }
 
 export type MatchType = "exact" | "urlpattern";

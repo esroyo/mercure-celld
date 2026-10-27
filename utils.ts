@@ -49,7 +49,7 @@ export async function parsePostRequest(
     data: formData.getAll("data"),
     private: formData.get("private"),
     retry: formData.get("retry"),
-    topic: formData.getAll("topic"),
+    topics: formData.getAll("topic").map((t) => ({ match: t as string })),
     type: formData.get("type"),
   } as SseUpdatePost;
 }

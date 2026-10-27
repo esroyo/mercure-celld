@@ -5,7 +5,7 @@ import { stub } from "@std/testing/unstable-stub";
 
 import { Topic } from "./topic.ts";
 import { SseUpdate } from "./sse_update.ts";
-import { Subscriber } from "./subscriber.ts";
+import { SubscriberSingleTopic } from "./subscriber.ts";
 
 function createSql() {
   const db = new DatabaseSync(":memory:");
@@ -105,7 +105,9 @@ Deno.test("should subscribe from now", async (_t) => {
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
-  const subscriber = new Subscriber({ topic: topicName });
+  const subscriber = new SubscriberSingleTopic({
+    topics: [{ match: topicName }],
+  });
   const sendSpy = spy(subscriber, "send");
   await topic.addSubscriber(subscriber);
   assertSpyCalls(sendSpy, 0);
@@ -120,7 +122,10 @@ Deno.test("should subscribe from the earliest update", async (_t) => {
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
-  const subscriber = new Subscriber({ lastEventId: "", topic: topicName });
+  const subscriber = new SubscriberSingleTopic({
+    lastEventId: "",
+    topics: [{ match: topicName }],
+  });
   const sendSpy = spy(subscriber, "send");
   await topic.addSubscriber(subscriber);
   assertSpyCalls(sendSpy, 3);
@@ -133,9 +138,9 @@ Deno.test("should subscribe from an specific update (built-in id)", async (_t) =
   const update = new SseUpdate({ topic: topicName });
   await topic.addSseUpdate(update);
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
-  const subscriber = new Subscriber({
+  const subscriber = new SubscriberSingleTopic({
     lastEventId: `#${update.id}`,
-    topic: topicName,
+    topics: [{ match: topicName }],
   });
   const sendSpy = spy(subscriber, "send");
   await topic.addSubscriber(subscriber);
@@ -150,7 +155,10 @@ Deno.test("should subscribe from an specific update (custom id)", async (_t) => 
   const update = new SseUpdate({ eventId, topic: topicName });
   await topic.addSseUpdate(update);
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
-  const subscriber = new Subscriber({ lastEventId: eventId, topic: topicName });
+  const subscriber = new SubscriberSingleTopic({
+    lastEventId: eventId,
+    topics: [{ match: topicName }],
+  });
   const sendSpy = spy(subscriber, "send");
   await topic.addSubscriber(subscriber);
   assertSpyCalls(sendSpy, 1);
@@ -160,9 +168,9 @@ Deno.test("should subscribe from now if the specific update is unknown", async (
   const { sql } = createSql();
   const topic = new Topic({ name: topicName }, { sql });
   await topic.addSseUpdate(new SseUpdate({ topic: topicName }));
-  const subscriber = new Subscriber({
+  const subscriber = new SubscriberSingleTopic({
     lastEventId: "magic-potato-1",
-    topic: topicName,
+    topics: [{ match: topicName }],
   });
   const sendSpy = spy(subscriber, "send");
   await topic.addSubscriber(subscriber);
@@ -174,7 +182,9 @@ Deno.test("should subscribe from now if the specific update is unknown", async (
 Deno.test("should not receive private updates if not authorized", async (_t) => {
   const { sql } = createSql();
   const topic = new Topic({ name: topicName }, { sql });
-  const subscriber = new Subscriber({ topic: topicName });
+  const subscriber = new SubscriberSingleTopic({
+    topics: [{ match: topicName }],
+  });
   const sendSpy = spy(subscriber, "send");
   const _ = stub(subscriber, "isAuthorized", async () => false);
   await topic.addSubscriber(subscriber);
@@ -189,7 +199,9 @@ Deno.test("should not receive private updates if not authorized", async (_t) => 
 Deno.test("should receive private updates if authorized", async (_t) => {
   const { sql } = createSql();
   const topic = new Topic({ name: topicName }, { sql });
-  const subscriber = new Subscriber({ topic: topicName });
+  const subscriber = new SubscriberSingleTopic({
+    topics: [{ match: topicName }],
+  });
   const sendSpy = spy(subscriber, "send");
   const _ = stub(subscriber, "isAuthorized", async () => true);
   await topic.addSubscriber(subscriber);
@@ -204,7 +216,9 @@ Deno.test("should receive private updates if authorized", async (_t) => {
 Deno.test("should unsubscribe if stream closes", async (_t) => {
   const { sql } = createSql();
   const topic = new Topic({ name: topicName }, { sql });
-  const subscriber = new Subscriber({ topic: topicName });
+  const subscriber = new SubscriberSingleTopic({
+    topics: [{ match: topicName }],
+  });
   const deferredClosed = Promise.withResolvers();
   const _ = stub(subscriber, "closed", { get: () => deferredClosed.promise });
   const sendSpy = spy(subscriber, "send");

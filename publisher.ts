@@ -9,15 +9,19 @@ export class Publisher implements PublisherLike {
   constructor(
     { id, body }:
       & Partial<Pick<PublisherLike, "id">>
-      & Required<Pick<PublisherLike, "body">> = { body: { topic: [] } },
+      & Required<Pick<PublisherLike, "body">> = { body: { topics: [] } },
     { ulid = _ulid }: { ulid?: () => string } = {},
   ) {
     this.id = id || ulid();
     this.body = body;
   }
 
+  get topics() {
+    return this.body.topics;
+  }
+
   get topic() {
-    return this.body.topic[0];
+    return this.body.topics[0]?.match;
   }
 
   async isAuthorized(_update: SseUpdateLike) {

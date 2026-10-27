@@ -1,16 +1,22 @@
 import type { TopicLike } from "./types.ts";
 import { SseUpdate } from "./sse_update.ts";
 import { Publisher } from "./publisher.ts";
-import { Subscriber } from "./subscriber.ts";
+import { SubscriberSingleTopic } from "./subscriber.ts";
 import { Topic } from "./topic.ts";
 
 export class SingleTopicUseCase {
-  #ctx: DurableObjectState;
-  #topic: TopicLike;
+  topic: TopicLike;
 
-  constructor(ctx: DurableObjectState, _env: Env) {
-    this.#ctx = ctx;
-    this.#topic = new Topic({ name: this.#ctx.id.name }, {
+  protected _ctx: ConstructorParameters<typeof SingleTopicUseCase>[0];
+  protected _env: ConstructorParameters<typeof SingleTopicUseCase>[1];
+
+  constructor(
+    ctx: Pick<DurableObjectState, "id" | "storage">,
+    env: Partial<Pick<Env, "SINGLE_TOPIC_USE_CASE">>,
+  ) {
+    this._ctx = ctx;
+    this._env = env;
+    this.topic = new Topic({ name: this._ctx.id.name }, {
       sql: ctx.storage.sql,
     });
   }
@@ -23,8 +29,8 @@ export class SingleTopicUseCase {
   }
 
   async get(request: Request) {
-    const subscriber = await Subscriber.from(request);
-    this.#topic.addSubscriber(subscriber);
+    const subscriber = await SubscriberSingleTopic.from(request);
+    this.topic.addSubscriber(subscriber);
     return new Response(subscriber.getReadableStream(), {
       headers: {
         "cache-control": "no-cache, no-transform",
@@ -38,11 +44,11 @@ export class SingleTopicUseCase {
     try {
       const publisher = await Publisher.from(request);
       const update = await SseUpdate.from(publisher.body);
-      if (!publisher.isAuthorized(update)) {
-        return new Response("Unauthorized", { status: 401 });
+      if (await publisher.isAuthorized(update)) {
+        await this.topic.addSseUpdate(update);
+        return new Response(null, { status: 204 });
       }
-      await this.#topic.addSseUpdate(update);
-      return new Response(null, { status: 204 });
+      return new Response("Unauthorized", { status: 401 });
     } catch (error) {
       const message = Error.isError(error) ? error.message : "Bad Request";
       return new Response(message, { status: 400 });

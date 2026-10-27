@@ -84,7 +84,7 @@ Deno.test("should serialize an event with multiple data lines as expected", asyn
 
 Deno.test("should map Publish body options", async (t) => {
   const postBody: SseUpdatePost = {
-    topic: ["greeting"],
+    topics: [{ match: "greeting" }],
     data: ["hello", "world"],
     id: "1-1",
     retry: "5",
@@ -92,7 +92,7 @@ Deno.test("should map Publish body options", async (t) => {
     private: "",
   };
   const update = await SseUpdate.from(postBody);
-  assertEquals(update.topic, postBody.topic[0]);
+  assertEquals(update.topic, postBody.topics[0].match);
   assertEquals(update.eventData, postBody.data);
   assertEquals(update.eventId, postBody.id);
   assertEquals(update.eventRetry, Number(postBody.retry));

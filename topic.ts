@@ -1,12 +1,12 @@
 import type {
   SseUpdateLike,
   SseUpdateRow,
-  SubscriberLike,
+  SubscriberStreamSingleTopicLike,
   TopicLike,
+  TopicSingleLike,
 } from "./types.ts";
 import { SseUpdate } from "./sse_update.ts";
 
-type CtorParams = ConstructorParameters<typeof Topic>;
 type PartialSqlStorage = {
   exec<T extends Record<string, SqlStorageValue>>(
     query: string,
@@ -14,20 +14,19 @@ type PartialSqlStorage = {
   ): { toArray(): T[] };
 };
 
-export class Topic implements TopicLike {
-  name: CtorParams[0]["name"];
+export class Topic implements TopicSingleLike {
+  name: ConstructorParameters<typeof Topic>[0]["name"];
+  subscribers: Set<SubscriberStreamSingleTopicLike> = new Set();
 
-  #sql: CtorParams[1]["sql"];
-  #subscribers: Set<SubscriberLike>;
+  protected _sql: ConstructorParameters<typeof Topic>[1]["sql"];
 
   constructor(
     { name }: Pick<TopicLike, "name">,
     { sql }: { sql: PartialSqlStorage },
   ) {
     this.name = name;
-    this.#subscribers = new Set();
-    this.#sql = sql;
-    this.#sql.exec(`
+    this._sql = sql;
+    this._sql.exec(`
         CREATE TABLE IF NOT EXISTS sse_updates (
           event_data TEXT,
           event_id TEXT UNIQUE,
@@ -39,11 +38,11 @@ export class Topic implements TopicLike {
       `);
   }
 
-  async addSubscriber(subscriber: SubscriberLike) {
-    this.#subscribers.add(subscriber);
+  async addSubscriber(subscriber: SubscriberStreamSingleTopicLike) {
+    this.subscribers.add(subscriber);
 
     subscriber.closed.catch(() => {
-      this.#subscribers.delete(subscriber);
+      this.subscribers.delete(subscriber);
     });
 
     if (subscriber.lastEventId !== null) {
@@ -69,7 +68,7 @@ export class Topic implements TopicLike {
   }
 
   async addSseUpdate(update: SseUpdateLike) {
-    this.#sql.exec(
+    this._sql.exec(
       "INSERT INTO sse_updates VALUES (?, ?, ?, ?, ?, ?)",
       update.eventData.length ? update.eventData.join("\n") : null,
       update.eventId,
@@ -79,7 +78,7 @@ export class Topic implements TopicLike {
       update.private,
     ).toArray();
     const text = update.toString();
-    for (const subscriber of this.#subscribers) {
+    for (const subscriber of this.subscribers) {
       if (!update.private || await subscriber.isAuthorized(update)) {
         subscriber.send(text);
       }
@@ -93,8 +92,7 @@ export class Topic implements TopicLike {
     const sqlArgs: [string, string] = "event_id" in where
       ? ["SELECT * FROM sse_updates WHERE event_id = ?", where.event_id]
       : ["SELECT * FROM sse_updates WHERE id > ? ORDER BY id ASC", where.id.gt];
-    const rows = this.#sql.exec<SseUpdateRow>(...sqlArgs).toArray();
-    return Promise.all(
+    const rows = this._sql.exec<SseUpdateRow>(...sqlArgs).toArray(); return Promise.all(
       rows.map((row) => SseUpdate.from({ ...row, topic: this.name })),
     );
   }

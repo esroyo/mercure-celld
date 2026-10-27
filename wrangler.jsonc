@@ -3,7 +3,10 @@
   "main": "index.ts",
   "compatibility_date": "2026-01-01",
   "durable_objects": {
-    "bindings": [{ "name": "SINGLE_TOPIC_USE_CASE", "class_name": "SingleTopicUseCase" }]
+    "bindings": [
+      { "name": "SINGLE_TOPIC_USE_CASE", "class_name": "SingleTopicUseCase" },
+      { "name": "MULTI_TOPIC_USE_CASE", "class_name": "MultiTopicUseCase" },
+    ]
   },
-  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["SingleTopicUseCase"] }]
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MercureCelld"] }]
 }

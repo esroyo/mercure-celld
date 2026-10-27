@@ -163,7 +163,7 @@ Deno.test("[parsePostRequest] should take the topics value from topic body field
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     method: "POST",
   });
-  assertEquals((await parsePostRequest(request)).topic, ["a"]);
+  assertEquals((await parsePostRequest(request)).topics, [{ match: "a" }]);
 });
 
 Deno.test("[parsePostRequest] should take the topics value from topic body fields", async (_t) => {
@@ -172,5 +172,7 @@ Deno.test("[parsePostRequest] should take the topics value from topic body field
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     method: "POST",
   });
-  assertEquals((await parsePostRequest(request)).topic, ["a", "b"]);
+  assertEquals((await parsePostRequest(request)).topics, [{ match: "a" }, {
+    match: "b",
+  }]);
 });

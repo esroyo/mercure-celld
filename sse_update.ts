@@ -84,7 +84,7 @@ export class SseUpdate implements SseUpdateLike {
       eventRetry: Number(input.retry) || undefined,
       eventType: input.type,
       private: "private" in input && !!input.private ? 1 : 0,
-      topic: input.topic[0],
+      topic: input.topics[0].match,
     });
   }
 }
