@@ -1,7 +1,7 @@
 import { SubscriberMultiTopic } from "./subscriber.ts";
 
 export class MultiTopicUseCase {
-  subscribers: Set<SubscriberMultiTopic> = new Set();
+  subscribers: Map<SubscriberMultiTopic, Record<string, boolean>> = new Map();
 
   protected _ctx: ConstructorParameters<typeof MultiTopicUseCase>[0];
   protected _env: ConstructorParameters<typeof MultiTopicUseCase>[1];
@@ -59,11 +59,13 @@ export class MultiTopicUseCase {
       this.subscribers.delete(subscriber);
     });
 
-    this.subscribers.add(subscriber);
+    const subscriberState: Record<string, boolean> = Object.create(null);
+    this.subscribers.set(subscriber, subscriberState);
 
     for (const { match, response } of upstreamResponses) {
       if (response.body) {
-        subscriber.connect(match, response.body);
+        subscriber.take(response.body);
+        subscriberState[match] = true;
       }
     }
 

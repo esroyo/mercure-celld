@@ -46,9 +46,9 @@ Deno.test("should wire exactly one connect per unique match", async () => {
   const response = await useCase.fetch(
     new Request("http://localhost/?match=a&match=b"),
   );
-  const subscriber = Array.from(useCase.subscribers)[0];
+  const [subscriber, state] = Array.from(useCase.subscribers.entries())[0];
 
-  assert(subscriber.topics.every((t) => t.isConnected));
+  assert(subscriber.topics.every((t) => state[t.match]));
   assertEquals(response.headers.get("content-type"), "text/event-stream");
   assertEquals(
     calls.map((c) => c.name),
@@ -96,7 +96,7 @@ Deno.test("should forward headers, method, signal and match param to single-topi
     signal: controller.signal,
   });
   await useCase.fetch(request);
-  const subscriber = Array.from(useCase.subscribers)[0];
+  const [subscriber] = Array.from(useCase.subscribers.entries())[0];
 
   assertEquals(calls.length, 2);
   calls.forEach((call, idx) => {

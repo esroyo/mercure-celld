@@ -1,22 +1,18 @@
 import { monotonicUlid as _ulid } from "@jsr/std__ulid";
 import type {
   Match,
-  SseUpdateLike,
+  StreamerLike,
   SubscriberLike,
-  SubscriberStreamLike,
-  SubscriberStreamMultiTopicLike,
-  SubscriberStreamSingleTopicLike,
+  SubscriberStreamerLike,
 } from "./types.ts";
 import { parseGetRequest } from "./utils.ts";
+import { SseStreamer } from "./sse_streamer.ts";
 
-export class Subscriber implements SubscriberStreamLike {
+export class Subscriber implements SubscriberStreamerLike {
   id: string;
   lastEventId: string;
   topics: Match[];
-
-  protected _encoder = new TextEncoder();
-  protected _stream = new TransformStream();
-  protected _writer = this._stream.writable.getWriter();
+  channel: StreamerLike = new SseStreamer();
 
   constructor(
     { id, lastEventId, topics }:
@@ -33,20 +29,33 @@ export class Subscriber implements SubscriberStreamLike {
     return this.topics[0]?.match;
   }
 
-  async isAuthorized(update: SseUpdateLike) {
-    if (!update.private) {
-      return true;
-    }
+  async isAuthorized(options: { topic: string }) {
     // TODO
     return false;
   }
 
-  get closed() {
-    return this._writer.closed;
+  get abort() {
+    return this.channel.abort.bind(this.channel);
   }
 
-  getReadableStream(): ReadableStream {
-    return this._stream.readable;
+  get close() {
+    return this.channel.close.bind(this.channel);
+  }
+
+  get closed() {
+    return this.channel.closed;
+  }
+
+  get getReadableStream() {
+    return this.channel.getReadableStream.bind(this.channel);
+  }
+
+  get emit() {
+    return this.channel.emit.bind(this.channel);
+  }
+
+  get take() {
+    return this.channel.take.bind(this.channel);
   }
 
   static async from<T>(
@@ -61,8 +70,7 @@ export class Subscriber implements SubscriberStreamLike {
   }
 }
 
-export class SubscriberSingleTopic extends Subscriber
-  implements SubscriberStreamSingleTopicLike {
+export class SubscriberSingleTopic extends Subscriber {
   constructor(...args) {
     super(...args);
     const exact = new Set(
@@ -74,17 +82,9 @@ export class SubscriberSingleTopic extends Subscriber
       throw new Error("SubscriberSingleTopic requires 1 exact topic");
     }
   }
-
-  async send(text: string): Promise<void> {
-    await this._writer.write(this._encoder.encode(text));
-  }
 }
 
-export class SubscriberMultiTopic extends Subscriber
-  implements SubscriberStreamMultiTopicLike {
-  declare topics: Array<Match & { isConnected: boolean }>;
-  protected _aborted = false;
-
+export class SubscriberMultiTopic extends Subscriber {
   constructor(...args) {
     super(...args);
     const exact = new Set(
@@ -94,50 +94,6 @@ export class SubscriberMultiTopic extends Subscriber
     );
     if (exact.size !== this.topics.length || this.topics.length < 2) {
       throw new Error("SubscriberMultiTopic requires 2 or more exact topics");
-    }
-  }
-
-  async connect(topic: string, readableUpstream: ReadableStream) {
-    const found = this.topics.find(({ match }) => match === topic);
-    if (!found) {
-      throw new Error(`SubscriberMultiTopic unknown topic: ${topic}`);
-    }
-    if (found.isConnected) {
-      return;
-    }
-
-    found.isConnected = true;
-
-    const upstreamController = new AbortController();
-    this.closed.catch(() => upstreamController.abort());
-    const textUpstream = readableUpstream.pipeThrough(new TextDecoderStream(), {
-      signal: upstreamController.signal,
-    });
-    let buffer = "";
-    try {
-      for await (const chunk of textUpstream) {
-        buffer += chunk;
-        const messages = buffer.split("\n\n");
-        buffer = messages.pop();
-        for (const msg of messages) {
-          await this._writer.write(this._encoder.encode(msg + "\n\n"));
-        }
-      }
-      if (buffer !== "") {
-        await this._writer.write(this._encoder.encode(buffer));
-      }
-    } catch (error) {
-      this._aborted = true;
-      await this._writer.abort(error);
-    } finally {
-      const found = this.topics.find(({ match }) => match === topic);
-      if (found) {
-        found.isConnected = false;
-      }
-      const upConnections = this.topics.filter((t) => t.isConnected);
-      if (!this._aborted && upConnections.length === 0) {
-        await this._writer.close().catch(() => {});
-      }
     }
   }
 }

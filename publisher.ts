@@ -24,7 +24,7 @@ export class Publisher implements PublisherLike {
     return this.body.topics[0]?.match;
   }
 
-  async isAuthorized(_update: SseUpdateLike) {
+  async isAuthorized(options: { topic: string }) {
     // TODO
     return true;
   }

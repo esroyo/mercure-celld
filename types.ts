@@ -118,7 +118,7 @@ export interface ClientLike {
   topic: string;
   topics: Match[];
 
-  isAuthorized(update: SseUpdateLike): Promise<boolean>;
+  isAuthorized(options: { topic: string }): Promise<boolean>;
 }
 
 /**
@@ -136,19 +136,7 @@ export interface SubscriberLike extends ClientLike {
   lastEventId: string | null;
 }
 
-export interface SubscriberStreamLike extends SubscriberLike {
-  closed: Promise<void>;
-  getReadableStream(): ReadableStream;
-}
-
-export interface SubscriberStreamMultiTopicLike extends SubscriberStreamLike {
-  topics: Array<Match & { isConnected: boolean }>;
-  connect(topic: string, readableUpstream: ReadableStream): Promise<void>;
-}
-
-export interface SubscriberStreamSingleTopicLike extends SubscriberStreamLike {
-  send(text: string): Promise<void>;
-}
+export interface SubscriberStreamerLike extends SubscriberLike, StreamerLike {}
 
 /**
  * Represents a publisher's state and details for a specific topic.
@@ -169,13 +157,8 @@ export interface TopicLike {
    * The public ID of the Topic.
    */
   name: string;
-  addSubscriber(subscriber: SubscriberLike): Promise<void>;
   addSseUpdate(update: SseUpdateLike): Promise<void>;
   findSseUpdate(filter?: SseUpdateFilterQuery): Promise<SseUpdateLike[]>;
-}
-
-export interface TopicSingleLike extends TopicLike {
-  addSubscriber(subscriber: SubscriberStreamSingleTopicLike): Promise<void>;
 }
 
 export type MatchType = "exact" | "urlpattern";
@@ -183,3 +166,17 @@ export type Match = {
   match: string;
   matchType?: MatchType;
 };
+
+export interface StreamerLike {
+  abort(reason?: unknown): Promise<void>;
+  close: () => Promise<void>;
+  closed: Promise<void>;
+  getReadableStream(
+    options?: { preventCancel?: boolean },
+  ): ReadableStream<Uint8Array>;
+  take(
+    upstream: ReadableStream,
+    options?: { preventClose?: boolean },
+  ): Promise<void>;
+  emit(text: string): Promise<void>;
+}
